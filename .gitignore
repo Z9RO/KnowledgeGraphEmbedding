@@ -1,3 +1,8 @@
 checkpoint
 *.npy
 *.log
+models
+__pycache__
+
+# edit
+.vscode 
