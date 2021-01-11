@@ -59,7 +59,7 @@ class KGEModel(nn.Module):
             self.modulus = nn.Parameter(torch.Tensor([[0.5 * self.embedding_range.item()]]))
         
         #Do not forget to modify this line when you add a new model in the "forward" function
-        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'NRotatE']:
+        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'NRotatE', 'KRotatE']:
             raise ValueError('model %s not supported' % model_name)
             
         if model_name == 'RotatE' and (not double_entity_embedding or double_relation_embedding):
@@ -152,6 +152,7 @@ class KGEModel(nn.Module):
             'DistMult': self.DistMult,
             'ComplEx': self.ComplEx,
             'RotatE': self.RotatE,
+            'KRotatE': self.KRotatE,
             'NRotatE': self.NRotatE,
             'pRotatE': self.pRotatE
         }
@@ -228,9 +229,26 @@ class KGEModel(nn.Module):
         score = self.gamma.item() - score.sum(dim = 2)
         return score
 
+    def KRotatE(self, head, relation, tail, mode):
+        zelta_head, phi_head = torch.chunk(head, 2, dim=2)
+        zelta_tail, phi_tail = torch.chunk(tail, 2, dim=2)
+        zelta_relat, phi_relat = torch.chunk(relation, 2, dim=2)
+        if mode == 'head-batch':
+            zelta_next = zelta_tail - zelta_relat
+            phi_next = phi_tail - phi_relat
+            score = 1 - torch.sin(zelta_head)*torch.sin(zelta_next)*torch.cos(phi_head-phi_next)-torch.cos(zelta_head)*torch.cos(zelta_next)
+        else:
+            # print(head.shape, relation.shape, tail.shape)
+            zelta_next = zelta_head + zelta_relat
+            phi_next = phi_head + phi_relat
+            score = 1 - torch.sin(zelta_tail)*torch.sin(zelta_next)*torch.cos(phi_tail-phi_next)-torch.cos(zelta_tail)*torch.cos(zelta_next) 
+
+        score = self.gamma.item() - torch.norm(score, p=1, dim=2)
+        return score
+
     def NRotatE(self, head, relation, tail, mode):
         if mode == 'head-batch':
-            score = 1 - torch.cos(head + relation - tail)
+            score = 1 - torch.cos(head + (relation - tail))
         else:
             # print(head.shape, relation.shape, tail.shape)
             score = 1 - torch.cos((head + relation) - tail)
