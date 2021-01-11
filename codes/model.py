@@ -59,7 +59,7 @@ class KGEModel(nn.Module):
             self.modulus = nn.Parameter(torch.Tensor([[0.5 * self.embedding_range.item()]]))
         
         #Do not forget to modify this line when you add a new model in the "forward" function
-        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE']:
+        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'NRotatE']:
             raise ValueError('model %s not supported' % model_name)
             
         if model_name == 'RotatE' and (not double_entity_embedding or double_relation_embedding):
@@ -152,6 +152,7 @@ class KGEModel(nn.Module):
             'DistMult': self.DistMult,
             'ComplEx': self.ComplEx,
             'RotatE': self.RotatE,
+            'NRotatE': self.NRotatE,
             'pRotatE': self.pRotatE
         }
         
@@ -225,6 +226,16 @@ class KGEModel(nn.Module):
         score = score.norm(dim = 0)
 
         score = self.gamma.item() - score.sum(dim = 2)
+        return score
+
+    def NRotatE(self, head, relation, tail, mode):
+        if mode == 'head-batch':
+            score = 1 - torch.cos(head + relation - tail)
+        else:
+            # print(head.shape, relation.shape, tail.shape)
+            score = 1 - torch.cos((head + relation) - tail)
+
+        score = self.gamma.item() - torch.norm(score, p=1, dim=2)
         return score
 
     def pRotatE(self, head, relation, tail, mode):
