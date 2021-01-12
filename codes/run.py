@@ -62,7 +62,7 @@ def parse_args(args=None):
     
     parser.add_argument('--save_checkpoint_steps', default=10000, type=int)
     parser.add_argument('--valid_steps', default=10000, type=int)
-    parser.add_argument('--log_steps', default=100, type=int, help='train log every xx steps')
+    parser.add_argument('--log_steps', default=1000, type=int, help='train log every xx steps')
     parser.add_argument('--test_log_steps', default=1000, type=int, help='valid/test log every xx steps')
     
     parser.add_argument('--nentity', type=int, default=0, help='DO NOT MANUALLY SET')
@@ -297,7 +297,7 @@ def main(args):
     # Set valid dataloader as it would be evaluated during training
     
     if args.do_train:
-        logging.info('learning_rate = %d' % current_learning_rate)
+        logging.info('learning_rate = %f' % current_learning_rate)
 
         training_logs = []
         
