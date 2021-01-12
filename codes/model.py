@@ -237,12 +237,11 @@ class KGEModel(nn.Module):
 
     def KRotatE(self, head, relation, tail, mode):
         if mode == 'head-batch':
-            head_phi = torch.chunk(head, 2, dim=self.KDim)
-            tail_phi = torch.chunk(tail-relation, 2, dim=self.KDim)
+            head_phi = torch.chunk(head, self.KDim, dim=2)
+            tail_phi = torch.chunk(tail-relation, self.KDim, dim=2)
         else:
-            head_phi = torch.chunk(head+relation, 2, dim=self.KDim)
-            tail_phi = torch.chunk(tail, 2, dim=self.KDim)
-
+            head_phi = torch.chunk(head+relation, self.KDim, dim=2)
+            tail_phi = torch.chunk(tail, self.KDim, dim=2)
         base = torch.cos(head_phi[-1]-tail_phi[-1])
         for i in range(self.KDim-2, -1, -1):
             base = torch.sin(head_phi[i])*torch.sin(tail[i])*base+torch.cos(head_phi[i])*torch.cos(tail_phi[i])
