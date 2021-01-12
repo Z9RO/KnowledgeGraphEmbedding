@@ -67,6 +67,7 @@ def parse_args(args=None):
     
     parser.add_argument('--nentity', type=int, default=0, help='DO NOT MANUALLY SET')
     parser.add_argument('--nrelation', type=int, default=0, help='DO NOT MANUALLY SET')
+    parser.add_argument('--KDim', type=int, default=1, help='KDim in KRotatE model')
     
     return parser.parse_args(args)
 
@@ -225,6 +226,7 @@ def main(args):
         hidden_dim=args.hidden_dim,
         gamma=args.gamma,
         double_entity_embedding=args.double_entity_embedding,
+        KDim=args.KDim,
         double_relation_embedding=args.double_relation_embedding
     )
     
