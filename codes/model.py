@@ -19,8 +19,7 @@ from torch.utils.data import DataLoader
 from dataloader import TestDataset
 
 class KGEModel(nn.Module):
-    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, 
-                 double_entity_embedding=False, double_relation_embedding=False):
+    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, KDim=1):
         super(KGEModel, self).__init__()
         self.model_name = model_name
         self.nentity = nentity
@@ -40,7 +39,14 @@ class KGEModel(nn.Module):
         
         self.entity_dim = hidden_dim*2 if double_entity_embedding else hidden_dim
         self.relation_dim = hidden_dim*2 if double_relation_embedding else hidden_dim
-        
+
+        if model_name == 'KRotatE':
+            self.KDim = int(KDim)
+            if self.KDim<1:
+                raise ValueError('KDim must > 1')
+            self.entity_dim = hidden_dim*KDim
+            self.relation_dim = hidden_dim*KDim
+
         self.entity_embedding = nn.Parameter(torch.zeros(nentity, self.entity_dim))
         nn.init.uniform_(
             tensor=self.entity_embedding, 
@@ -230,20 +236,18 @@ class KGEModel(nn.Module):
         return score
 
     def KRotatE(self, head, relation, tail, mode):
-        zelta_head, phi_head = torch.chunk(head, 2, dim=2)
-        zelta_tail, phi_tail = torch.chunk(tail, 2, dim=2)
-        zelta_relat, phi_relat = torch.chunk(relation, 2, dim=2)
         if mode == 'head-batch':
-            zelta_next = zelta_tail - zelta_relat
-            phi_next = phi_tail - phi_relat
-            score = 1 - torch.sin(zelta_head)*torch.sin(zelta_next)*torch.cos(phi_head-phi_next)-torch.cos(zelta_head)*torch.cos(zelta_next)
+            head_phi = torch.chunk(head, 2, dim=self.KDim)
+            tail_phi = torch.chunk(tail-relation, 2, dim=self.KDim)
         else:
-            # print(head.shape, relation.shape, tail.shape)
-            zelta_next = zelta_head + zelta_relat
-            phi_next = phi_head + phi_relat
-            score = 1 - torch.sin(zelta_tail)*torch.sin(zelta_next)*torch.cos(phi_tail-phi_next)-torch.cos(zelta_tail)*torch.cos(zelta_next) 
+            head_phi = torch.chunk(head+relation, 2, dim=self.KDim)
+            tail_phi = torch.chunk(tail, 2, dim=self.KDim)
 
-        score = self.gamma.item() - torch.norm(score, p=1, dim=2)
+        base = torch.cos(head_phi[-1]-tail_phi[-1])
+        for i in range(self.KDim-2, -1, -1):
+            base = torch.sin(head_phi[i])*torch.sin(tail[i])*base+torch.cos(head_phi[i])*torch.cos(tail_phi[i])
+
+        score = self.gamma.item() - torch.norm(1-base, p=1, dim=2)
         return score
 
     def NRotatE(self, head, relation, tail, mode):
