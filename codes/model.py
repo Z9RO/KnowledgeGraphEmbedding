@@ -248,9 +248,11 @@ class KGEModel(nn.Module):
         base = torch.cos(head_phi[-1]-tail_phi[-1])
 
         for i in range(self.KDim-2, -1, -1):
-            head_phi[i] = torch.remainder(head_phi[i], pi)
-            tail_phi[i] = torch.remainder(tail_phi[i], pi)
-            base = torch.sin(head_phi[i])*torch.sin(tail_phi[i])*base+torch.cos(head_phi[i])*torch.cos(tail_phi[i])
+            # alpha_part = torch.remainder(head_phi[i], pi)
+            # beta_part = torch.remainder(tail_phi[i], pi)
+            alpha_part = head_phi[i]
+            beta_part = tail_phi[i]
+            base = torch.sin(alpha_part)*torch.sin(beta_part)*base+torch.cos(alpha_part)*torch.cos(beta_part)
 
         score = self.gamma.item() - torch.norm(1-base, p=1, dim=2)
         return score
