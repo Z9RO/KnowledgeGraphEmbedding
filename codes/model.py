@@ -236,15 +236,21 @@ class KGEModel(nn.Module):
         return score
 
     def KRotatE(self, head, relation, tail, mode):
+        pi = 3.14159265358979323846
         if mode == 'head-batch':
             head_phi = torch.chunk(head, self.KDim, dim=2)
             tail_phi = torch.chunk(tail-relation, self.KDim, dim=2)
         else:
             head_phi = torch.chunk(head+relation, self.KDim, dim=2)
             tail_phi = torch.chunk(tail, self.KDim, dim=2)
+        # head_phi[i] = torch.remainder(head_phi[-1], 2*pi)
+        # tail_phi[i] = torch.remainder(tail_phi[-1], 2*pi)
         base = torch.cos(head_phi[-1]-tail_phi[-1])
+
         for i in range(self.KDim-2, -1, -1):
-            base = torch.sin(head_phi[i])*torch.sin(tail[i])*base+torch.cos(head_phi[i])*torch.cos(tail_phi[i])
+            head_phi[i] = torch.remainder(head_phi[i], pi)
+            tail_phi[i] = torch.remainder(tail_phi[i], pi)
+            base = torch.sin(head_phi[i])*torch.sin(tail_phi[i])*base+torch.cos(head_phi[i])*torch.cos(tail_phi[i])
 
         score = self.gamma.item() - torch.norm(1-base, p=1, dim=2)
         return score
