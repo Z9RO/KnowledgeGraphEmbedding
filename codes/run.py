@@ -41,6 +41,7 @@ def parse_args(args=None):
     parser.add_argument('--model', default='TransE', type=str)
     parser.add_argument('-de', '--double_entity_embedding', action='store_true')
     parser.add_argument('-dr', '--double_relation_embedding', action='store_true')
+    parser.add_argument('-wr', '--withR', action='store_true')
     
     parser.add_argument('-n', '--negative_sample_size', default=128, type=int)
     parser.add_argument('-d', '--hidden_dim', default=500, type=int)
@@ -227,6 +228,7 @@ def main(args):
         gamma=args.gamma,
         double_entity_embedding=args.double_entity_embedding,
         KDim=args.KDim,
+        withR=args.withR,
         double_relation_embedding=args.double_relation_embedding
     )
     

@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from dataloader import TestDataset
 
 class KGEModel(nn.Module):
-    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, KDim=1):
+    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, KDim=1, withR=False):
         super(KGEModel, self).__init__()
         self.model_name = model_name
         self.nentity = nentity
@@ -53,7 +53,10 @@ class KGEModel(nn.Module):
             self.phi_dim = hidden_dim*KDim
             self.r_dim = hidden_dim
             self.entity_dim = hidden_dim*(KDim+1)
-            self.relation_dim = hidden_dim*(KDim+1)
+            self.withR = withR
+            self.relation_dim = hidden_dim*KDim
+            if withR:
+                self.relation_dim += hidden_dim
 
         self.entity_embedding = nn.Parameter(torch.zeros(nentity, self.entity_dim))
         nn.init.uniform_(
@@ -248,15 +251,18 @@ class KGEModel(nn.Module):
         pi = 3.14159265358979323846
         head_r, head_phi = torch.split(head, [self.r_dim, self.phi_dim], dim=2)
         tail_r, tail_phi = torch.split(tail, [self.r_dim, self.phi_dim], dim=2)
-        relation_r, relation_phi = torch.split(relation, [self.r_dim, self.phi_dim], dim=2)
+        if self.withR:
+            relation_r, relation_phi = torch.split(relation, [self.r_dim, self.phi_dim], dim=2)
+            head_r = head_r + relation_r
+        else:
+            relation_phi = relation
+        
         if mode == 'head-batch':
             head_phis = torch.chunk(head_phi, self.KDim, dim=2)
             tail_phis = torch.chunk(tail_phi-relation_phi, self.KDim, dim=2)
-            tail_r = tail_r - relation_r
         else:
             head_phis = torch.chunk(head_phi+relation_phi, self.KDim, dim=2)
             tail_phis = torch.chunk(tail_phi, self.KDim, dim=2)
-            head_r = head_r + relation_r
 
         base = torch.cos(head_phis[-1]-tail_phis[-1])
 
