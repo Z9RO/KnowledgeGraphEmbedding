@@ -46,6 +46,14 @@ class KGEModel(nn.Module):
                 raise ValueError('KDim must > 1')
             self.entity_dim = hidden_dim*KDim
             self.relation_dim = hidden_dim*KDim
+        if model_name == 'KRotatRE':
+            self.KDim = int(KDim)
+            if self.KDim<1:
+                raise ValueError('KDim must > 1')
+            self.phi_dim = hidden_dim*KDim
+            self.r_dim = hidden_dim
+            self.entity_dim = hidden_dim*(KDim+1)
+            self.relation_dim = hidden_dim*(KDim+1)
 
         self.entity_embedding = nn.Parameter(torch.zeros(nentity, self.entity_dim))
         nn.init.uniform_(
@@ -65,7 +73,7 @@ class KGEModel(nn.Module):
             self.modulus = nn.Parameter(torch.Tensor([[0.5 * self.embedding_range.item()]]))
         
         #Do not forget to modify this line when you add a new model in the "forward" function
-        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'NRotatE', 'KRotatE']:
+        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'NRotatE', 'KRotatE', 'KRotatRE']:
             raise ValueError('model %s not supported' % model_name)
             
         if model_name == 'RotatE' and (not double_entity_embedding or double_relation_embedding):
@@ -159,6 +167,7 @@ class KGEModel(nn.Module):
             'ComplEx': self.ComplEx,
             'RotatE': self.RotatE,
             'KRotatE': self.KRotatE,
+            'KRotatRE': self.KRotatRE,
             'NRotatE': self.NRotatE,
             'pRotatE': self.pRotatE
         }
@@ -233,6 +242,55 @@ class KGEModel(nn.Module):
         score = score.norm(dim = 0)
 
         score = self.gamma.item() - score.sum(dim = 2)
+        return score
+
+    def KRotatRE(self, head, relation, tail, mode):
+        pi = 3.14159265358979323846
+        head_r, head_phi = torch.split(head, [self.r_dim, self.phi_dim], dim=2)
+        tail_r, tail_phi = torch.split(tail, [self.r_dim, self.phi_dim], dim=2)
+        relation_r, relation_phi = torch.split(relation, [self.r_dim, self.phi_dim], dim=2)
+        if mode == 'head-batch':
+            head_phis = torch.chunk(head_phi, self.KDim, dim=2)
+            tail_phis = torch.chunk(tail_phi-relation_phi, self.KDim, dim=2)
+            tail_r = tail_r - relation_r
+        else:
+            head_phis = torch.chunk(head_phi+relation_phi, self.KDim, dim=2)
+            tail_phis = torch.chunk(tail_phi, self.KDim, dim=2)
+            head_r = head_r + relation_r
+
+        base = torch.cos(head_phis[-1]-tail_phis[-1])
+
+        for i in range(self.KDim-2, -1, -1):
+            alpha_part = head_phis[i]
+            beta_part = tail_phis[i]
+            base = torch.sin(alpha_part)*torch.sin(beta_part)*base+torch.cos(alpha_part)*torch.cos(beta_part)
+
+        score = head_r*head_r+tail_r*tail_r-2*head_r*tail_r*base
+
+        score = self.gamma.item() - torch.norm(score, p=1, dim=2)
+        return score
+
+    def KRotatRE2(self, head, relation, tail, mode):
+        pi = 3.14159265358979323846
+        if mode == 'head-batch':
+            head_phi = torch.chunk(head, self.KDim+1, dim=2)
+            tail_phi = torch.chunk(tail-relation, self.KDim+1, dim=2)
+        else:
+            head_phi = torch.chunk(head+relation, self.KDim+1, dim=2)
+            tail_phi = torch.chunk(tail, self.KDim+1, dim=2)
+
+        base = torch.cos(head_phi[-2]-tail_phi[-2])
+        head_r = head_phi[-1]
+        tail_r = tail_phi[-1]
+
+        for i in range(self.KDim-3, -1, -1):
+            alpha_part = head_phi[i]
+            beta_part = tail_phi[i]
+            base = torch.sin(alpha_part)*torch.sin(beta_part)*base+torch.cos(alpha_part)*torch.cos(beta_part)
+
+        score = head_r*head_r+tail_r*tail_r-2*head_r*tail_r*base
+
+        score = self.gamma.item() - torch.norm(score, p=1, dim=2)
         return score
 
     def KRotatE(self, head, relation, tail, mode):
