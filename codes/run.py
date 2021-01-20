@@ -263,6 +263,7 @@ def main(args):
         current_learning_rate = args.learning_rate
         optimizer = torch.optim.Adam(
             filter(lambda p: p.requires_grad, kge_model.parameters()), 
+            amsgrad=True,
             lr=current_learning_rate
         )
         if args.warm_up_steps:
@@ -315,6 +316,7 @@ def main(args):
                 logging.info('Change learning_rate to %f at step %d' % (current_learning_rate, step))
                 optimizer = torch.optim.Adam(
                     filter(lambda p: p.requires_grad, kge_model.parameters()), 
+                    amsgrad=True,
                     lr=current_learning_rate
                 )
                 warm_up_steps = warm_up_steps * 3
