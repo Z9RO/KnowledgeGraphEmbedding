@@ -12,6 +12,8 @@ import random
 
 import numpy as np
 import torch
+import torch.optim
+import torch.optim.lr_scheduler
 
 from torch.utils.data import DataLoader
 
@@ -269,7 +271,8 @@ def main(args):
         if args.warm_up_steps:
             warm_up_steps = args.warm_up_steps
         else:
-            warm_up_steps = args.max_steps // 2
+            warm_up_steps = args.max_steps // 3
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[warm_up_steps, warm_up_steps*2], gamma=0.3)
 
     if args.init_checkpoint:
         # Restore model from checkpoint directory
@@ -311,16 +314,6 @@ def main(args):
             
             training_logs.append(log)
             
-            if step >= warm_up_steps:
-                current_learning_rate = current_learning_rate / 10
-                logging.info('Change learning_rate to %f at step %d' % (current_learning_rate, step))
-                optimizer = torch.optim.Adam(
-                    filter(lambda p: p.requires_grad, kge_model.parameters()), 
-                    amsgrad=True,
-                    lr=current_learning_rate
-                )
-                warm_up_steps = warm_up_steps * 3
-            
             if step % args.save_checkpoint_steps == 0:
                 save_variable_list = {
                     'step': step, 
@@ -340,6 +333,8 @@ def main(args):
                 logging.info('Evaluating on Valid Dataset...')
                 metrics = kge_model.test_step(kge_model, valid_triples, all_true_triples, args)
                 log_metrics('Valid', step, metrics)
+            
+            scheduler.step()
         
         save_variable_list = {
             'step': step, 
