@@ -42,7 +42,10 @@ class KGEModel(nn.Module):
         if model_name == 'CosE':
             self.entity_dim = hidden_dim*2
             self.relation_dim = hidden_dim*2
-            self.omega = omega
+            self.omega = nn.Parameter(
+                torch.Tensor([omega]), 
+                requires_grad=False
+            )
 
         self.entity_embedding = nn.Parameter(torch.zeros(nentity, self.entity_dim))
         nn.init.uniform_(
@@ -172,24 +175,21 @@ class KGEModel(nn.Module):
         head_r, head_phi = torch.chunk(head, 2, dim=2)
         tail_r, tail_phi = torch.chunk(tail, 2, dim=2)
         relation_r, relation_phi = torch.chunk(relation, 2, dim=2)
+
         score_r = torch.norm(head_r*relation_r-tail_r, p=1, dim=2)
 
         head_phi = head_phi+relation_phi
-        head_norm = torch.norm(head_phi, p=2, dim=2)
-        tail_norm = torch.norm(tail_phi, p=2, dim=2)
-        score_phi = torch.norm(head_phi*tail_phi, p=1, dim=2)/(head_norm*tail_norm)
+        score_phi = F.cosine_similarity(head_phi, tail_phi, dim=2)
 
-        score = self.omega*score_r + (1-self.omega)*score_phi
-        score = self.gamma.item() - score
+        score = (1-self.omega)*score_phi - self.omega*score_r
+        score = self.gamma.item() + score
         return score
 
     def BaseE(self, head, relation, tail, mode):
         head_r = head+relation
-        head_norm = torch.norm(head_r, p=2, dim=2)
-        tail_norm = torch.norm(tail, p=2, dim=2)
-        score = torch.norm(head_r*tail, p=1, dim=2)/(head_norm*tail_norm)
+        score = F.cosine_similarity(head_r, tail, dim=2)
 
-        score = self.gamma.item() - score
+        score = score + self.gamma.item()
         return score
 
 
