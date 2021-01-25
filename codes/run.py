@@ -41,11 +41,11 @@ def parse_args(args=None):
     parser.add_argument('--model', default='TransE', type=str)
     parser.add_argument('-de', '--double_entity_embedding', action='store_true')
     parser.add_argument('-dr', '--double_relation_embedding', action='store_true')
-    parser.add_argument('-wr', '--withR', action='store_true')
     
     parser.add_argument('-n', '--negative_sample_size', default=128, type=int)
     parser.add_argument('-d', '--hidden_dim', default=500, type=int)
     parser.add_argument('-g', '--gamma', default=12.0, type=float)
+    parser.add_argument('-ome', '--omega', default=0.5, type=float)
     parser.add_argument('-adv', '--negative_adversarial_sampling', action='store_true')
     parser.add_argument('-a', '--adversarial_temperature', default=1.0, type=float)
     parser.add_argument('-b', '--batch_size', default=1024, type=int)
@@ -68,7 +68,6 @@ def parse_args(args=None):
     
     parser.add_argument('--nentity', type=int, default=0, help='DO NOT MANUALLY SET')
     parser.add_argument('--nrelation', type=int, default=0, help='DO NOT MANUALLY SET')
-    parser.add_argument('--KDim', type=int, default=1, help='KDim in KRotatE model')
     
     return parser.parse_args(args)
 
@@ -227,8 +226,7 @@ def main(args):
         hidden_dim=args.hidden_dim,
         gamma=args.gamma,
         double_entity_embedding=args.double_entity_embedding,
-        KDim=args.KDim,
-        withR=args.withR,
+        omega=args.omega,
         double_relation_embedding=args.double_relation_embedding
     )
     

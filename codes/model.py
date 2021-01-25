@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 from dataloader import TestDataset
 
 class KGEModel(nn.Module):
-    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, KDim=1, withR=False):
+    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, omega=0.5):
         super(KGEModel, self).__init__()
         self.model_name = model_name
         self.nentity = nentity
@@ -39,6 +39,10 @@ class KGEModel(nn.Module):
         
         self.entity_dim = hidden_dim*2 if double_entity_embedding else hidden_dim
         self.relation_dim = hidden_dim*2 if double_relation_embedding else hidden_dim
+        if model_name == 'CosE':
+            self.entity_dim = hidden_dim*2
+            self.relation_dim = hidden_dim*2
+            self.omega = omega
 
         self.entity_embedding = nn.Parameter(torch.zeros(nentity, self.entity_dim))
         nn.init.uniform_(
@@ -58,7 +62,7 @@ class KGEModel(nn.Module):
             self.modulus = nn.Parameter(torch.Tensor([[0.5 * self.embedding_range.item()]]))
         
         #Do not forget to modify this line when you add a new model in the "forward" function
-        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'NRotatE']:
+        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'NRotatE', 'BaseE', 'CosE']:
             raise ValueError('model %s not supported' % model_name)
             
         if model_name == 'RotatE' and (not double_entity_embedding or double_relation_embedding):
@@ -151,6 +155,8 @@ class KGEModel(nn.Module):
             'DistMult': self.DistMult,
             'ComplEx': self.ComplEx,
             'RotatE': self.RotatE,
+            'BaseE': self.BaseE,
+            'CosE': self.CosE,
             'NRotatE': self.NRotatE,
             'pRotatE': self.pRotatE
         }
@@ -162,6 +168,31 @@ class KGEModel(nn.Module):
         
         return score
     
+    def CosE(self, head, relation, tail, mode):
+        head_r, head_phi = torch.chunk(head, 2, dim=2)
+        tail_r, tail_phi = torch.chunk(tail, 2, dim=2)
+        relation_r, relation_phi = torch.chunk(relation, 2, dim=2)
+        score_r = torch.norm(head_r*relation_r-tail_r, p=1, dim=2)
+
+        head_phi = head_phi+relation_phi
+        head_norm = torch.norm(head_phi, p=2, dim=2)
+        tail_norm = torch.norm(tail_phi, p=2, dim=2)
+        score_phi = torch.norm(head_phi*tail_phi, p=1, dim=2)/(head_norm*tail_norm)
+
+        score = self.omega*score_r + (1-self.omega)*score_phi
+        score = self.gamma.item() - score
+        return score
+
+    def BaseE(self, head, relation, tail, mode):
+        head_r = head+relation
+        head_norm = torch.norm(head_r, p=2, dim=2)
+        tail_norm = torch.norm(tail, p=2, dim=2)
+        score = torch.norm(head_r*tail, p=1, dim=2)/(head_norm*tail_norm)
+
+        score = self.gamma.item() - score
+        return score
+
+
     def TransE(self, head, relation, tail, mode):
         if mode == 'head-batch':
             score = head + (relation - tail)
@@ -413,7 +444,8 @@ class KGEModel(nn.Module):
 
                         for i in range(batch_size):
                             #Notice that argsort is not ranking
-                            ranking = (argsort[i, :] == positive_arg[i]).nonzero()
+                            ranking = torch.nonzero(argsort[i, :] == positive_arg[i])
+                            # ranking = (argsort[i, :] == positive_arg[i]).nonzero()
                             assert ranking.size(0) == 1
 
                             #ranking + 1 is the true ranking used in evaluation metrics
