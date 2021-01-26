@@ -176,22 +176,21 @@ class KGEModel(nn.Module):
         tail_r, tail_phi = torch.chunk(tail, 2, dim=2)
         relation_r, relation_phi = torch.chunk(relation, 2, dim=2)
 
-        score_r = torch.norm(head_r*relation_r-tail_r, p=1, dim=2)
+        relation_r = relation_r/self.embedding_range.item()
+        score_r = torch.norm(head_r*relation_r-tail_r, p=1, dim=2)/self.gamma.item()
 
         head_phi = head_phi+relation_phi
         score_phi = F.cosine_similarity(head_phi, tail_phi, dim=2)
 
-        score = (1-self.omega)*score_phi - self.omega*score_r
-        score = self.gamma.item() + score
+        score = (1-self.omega)*score_phi - self.omega*score_r - 2.0
         return score
 
     def BaseE(self, head, relation, tail, mode):
         head_r = head+relation
         score = F.cosine_similarity(head_r, tail, dim=2)
 
-        score = score + self.gamma.item()
+        score = score - 1.0
         return score
-
 
     def TransE(self, head, relation, tail, mode):
         if mode == 'head-batch':
