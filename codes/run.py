@@ -72,7 +72,8 @@ def parse_args(args=None):
     
     parser.add_argument('--nentity', type=int, default=0, help='DO NOT MANUALLY SET')
     parser.add_argument('--nrelation', type=int, default=0, help='DO NOT MANUALLY SET')
-    parser.add_argument('--KDim', type=int, default=1, help='KDim in KRotatE model')
+    parser.add_argument('--KDim', type=int, default=1, help='KDim in KCosE model')
+    parser.add_argument('--omega', type=float, default=1, help='omega in KCosE model')
     
     return parser.parse_args(args)
 
@@ -232,6 +233,7 @@ def main(args):
         gamma=args.gamma,
         double_entity_embedding=args.double_entity_embedding,
         KDim=args.KDim,
+        omega=args.omega,
         double_relation_embedding=args.double_relation_embedding
     )
     
