@@ -33,17 +33,19 @@ class KGEModel(nn.Module):
         )
         
         self.embedding_range = nn.Parameter(
-            torch.Tensor([(self.gamma.item() + self.epsilon) / (KDim*hidden_dim)]), 
+            torch.Tensor([(self.gamma.item() + self.epsilon) / hidden_dim]), 
             requires_grad=False
         )
         
         self.entity_dim = hidden_dim*2 if double_entity_embedding else hidden_dim
         self.relation_dim = hidden_dim*2 if double_relation_embedding else hidden_dim
 
-        if model_name == 'KCosE':
-            self.KDim = KDim
-            self.omega = omega
-            self.entity_dim = hidden_dim*KDim
+        if model_name == 'ConE':
+            pi = 3.14159265358979323846
+            self.omega = (omega*pi/2)* torch.rand(hidden_dim, requires_grad=False).cuda()
+            self.omega = torch.pow(torch.tan(self.omega), 2)
+
+            self.entity_dim = hidden_dim*2
             self.relation_dim = self.entity_dim
 
         self.entity_embedding = nn.Parameter(torch.zeros(nentity, self.entity_dim))
@@ -64,7 +66,7 @@ class KGEModel(nn.Module):
             self.modulus = nn.Parameter(torch.Tensor([[0.5 * self.embedding_range.item()]]))
         
         #Do not forget to modify this line when you add a new model in the "forward" function
-        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'KCosE']:
+        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'ConE']:
             raise ValueError('model %s not supported' % model_name)
             
         if model_name == 'RotatE' and (not double_entity_embedding or double_relation_embedding):
@@ -157,7 +159,7 @@ class KGEModel(nn.Module):
             'DistMult': self.DistMult,
             'ComplEx': self.ComplEx,
             'RotatE': self.RotatE,
-            'KCosE': self.KCosE,
+            'ConE': self.ConE,
             'pRotatE': self.pRotatE
         }
         
@@ -168,18 +170,23 @@ class KGEModel(nn.Module):
         
         return score
     
-    def KCosE(self, head, relation, tail, mode):
+    def ConE(self, head, relation, tail, mode):
+        pi = 3.14159265358979323846
         if mode == 'head-batch':
             tail = tail - relation
         else:
             head = head + relation
-        score_r = self.gamma.item() - torch.norm(head-tail, p=1, dim=2)
+        
+        head_z, head_phi = torch.chunk(head, 2, dim=2)
+        tail_z, tail_phi = torch.chunk(tail, 2, dim=2)
+        delta_phi = (pi/self.embedding_range.item())*(head_phi-tail_phi)
+        delta_z = head_z-tail_z
 
-        head = head.view(-1, head.shape[1], self.hidden_dim, self.KDim)
-        tail = tail.view(-1, tail.shape[1], self.hidden_dim, self.KDim)
-        score_cos = F.cosine_similarity(head, tail, dim=-1)
-        score_cos = torch.sum(score_cos, dim=2)/self.hidden_dim - 1.0
-        score = (1-self.omega)*self.gamma.item()*score_cos + self.omega*score_r
+        score_part1 = (1+self.omega)*(delta_z*delta_z)
+        score_part2 = 2*self.omega*head_z*tail_z*(1-torch.cos(delta_phi))
+        score = score_part1+score_part2
+        score = torch.sum(torch.sqrt(score+1e-6), dim=2)
+        score = self.gamma.item() - score
         return score
 
     def TransE(self, head, relation, tail, mode):
