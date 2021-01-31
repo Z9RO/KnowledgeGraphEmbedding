@@ -33,7 +33,7 @@ class KGEModel(nn.Module):
         )
         
         self.embedding_range = nn.Parameter(
-            torch.Tensor([(self.gamma.item() + self.epsilon) / hidden_dim]), 
+            torch.Tensor([(self.gamma.item() + self.epsilon) / (KDim*hidden_dim)]), 
             requires_grad=False
         )
         
@@ -43,10 +43,6 @@ class KGEModel(nn.Module):
         if model_name == 'KCosE':
             self.KDim = KDim
             self.omega = omega
-            self.embedding_range = nn.Parameter(
-                torch.Tensor([self.embedding_range.item()/KDim]), 
-                requires_grad=False
-            )
             self.entity_dim = hidden_dim*KDim
             self.relation_dim = self.entity_dim
 
@@ -182,8 +178,8 @@ class KGEModel(nn.Module):
         head = head.view(-1, head.shape[1], self.hidden_dim, self.KDim)
         tail = tail.view(-1, tail.shape[1], self.hidden_dim, self.KDim)
         score_cos = F.cosine_similarity(head, tail, dim=-1)
-        score_cos = (self.gamma.item()/self.hidden_dim) * torch.norm(score_cos, p=1, dim=2)
-        score = (1-self.omega)*score_cos + self.omega*score_r
+        score_cos = torch.sum(score_cos, dim=2)/self.hidden_dim - 1.0
+        score = (1-self.omega)*self.gamma.item()*score_cos + self.omega*score_r
         return score
 
     def TransE(self, head, relation, tail, mode):
@@ -427,7 +423,7 @@ class KGEModel(nn.Module):
 
                         for i in range(batch_size):
                             #Notice that argsort is not ranking
-                            ranking = (argsort[i, :] == positive_arg[i]).nonzero()
+                            ranking = torch.nonzero(argsort[i, :] == positive_arg[i])
                             assert ranking.size(0) == 1
 
                             #ranking + 1 is the true ranking used in evaluation metrics
