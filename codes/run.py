@@ -310,7 +310,7 @@ def main(args):
         losses = []
         min_loss = 10
         last_loss = 10
-        while last_loss-min_loss<0.5:
+        while last_loss-min_loss<0.5 and base_lr<10:
             epochs = 30
             logs = []
             for i in range(epochs):
