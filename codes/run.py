@@ -9,11 +9,13 @@ import json
 import logging
 import os
 import random
+import sys
 
 import numpy as np
 import torch
 import torch.optim
 import torch.optim.lr_scheduler
+import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader
 
@@ -33,6 +35,7 @@ def parse_args(args=None):
     parser.add_argument('--do_train', action='store_true')
     parser.add_argument('--do_valid', action='store_true')
     parser.add_argument('--do_test', action='store_true')
+    parser.add_argument('--do_lr_chosen', action='store_true')
     parser.add_argument('--evaluate_train', action='store_true', help='Evaluate on training data')
     
     parser.add_argument('--countries', action='store_true', help='Use Countries S1/S2/S3 datasets')
@@ -263,9 +266,8 @@ def main(args):
         
         # Set training configuration
         current_learning_rate = args.learning_rate
-        optimizer = torch.optim.Adam(
+        optimizer = torch.optim.SGD(
             filter(lambda p: p.requires_grad, kge_model.parameters()), 
-            amsgrad=True,
             lr=current_learning_rate
         )
         if args.warm_up_steps:
@@ -302,6 +304,31 @@ def main(args):
     
     # Set valid dataloader as it would be evaluated during training
     
+    if args.do_lr_chosen:
+        base_lr = current_learning_rate
+        lrs = []
+        losses = []
+        while base_lr < 1.0:
+            epochs = 50
+            logs = []
+            for i in range(epochs):
+                log = kge_model.train_step(kge_model, optimizer, train_iterator, args)
+                logs.append(log['loss'])
+            lrs.append(base_lr)
+            base_lr = base_lr*1.1
+            losses.append(sum(logs)/len(logs))
+            print(lrs[-1], losses[-1])
+            optimizer = torch.optim.Adam(
+                filter(lambda p: p.requires_grad, kge_model.parameters()), 
+                lr=base_lr
+            )
+        
+        plt.plot(lrs, losses)
+        plt.xscale('log')
+        plt.savefig(args.save_path+'.png')
+        plt.show()
+        sys.exit(0)
+
     if args.do_train:
         logging.info('learning_rate = %f' % current_learning_rate)
 
