@@ -274,7 +274,7 @@ def main(args):
             warm_up_steps = args.warm_up_steps
         else:
             warm_up_steps = args.max_steps // 3
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[warm_up_steps, warm_up_steps*2], gamma=0.3)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[warm_up_steps*2], gamma=0.01)
 
     if args.init_checkpoint:
         # Restore model from checkpoint directory
@@ -308,8 +308,10 @@ def main(args):
         base_lr = current_learning_rate
         lrs = []
         losses = []
-        while base_lr < 1.0:
-            epochs = 50
+        min_loss = 10
+        last_loss = 10
+        while last_loss-min_loss<0.5:
+            epochs = 30
             logs = []
             for i in range(epochs):
                 log = kge_model.train_step(kge_model, optimizer, train_iterator, args)
@@ -317,8 +319,10 @@ def main(args):
             lrs.append(base_lr)
             base_lr = base_lr*1.1
             losses.append(sum(logs)/len(logs))
+            min_loss = min(min_loss, losses[-1])
+            last_loss = losses[-1]
             print(lrs[-1], losses[-1])
-            optimizer = torch.optim.Adam(
+            optimizer = torch.optim.SGD(
                 filter(lambda p: p.requires_grad, kge_model.parameters()), 
                 lr=base_lr
             )
@@ -326,6 +330,8 @@ def main(args):
         plt.plot(lrs, losses)
         plt.xscale('log')
         plt.savefig(args.save_path+'.png')
+        with open(args.save_path+'.in', 'w') as f:
+            f.writelines((str(lr)+' '+str(loss)+'\n' for lr, loss in zip(lrs, losses)))
         plt.show()
         sys.exit(0)
 
