@@ -173,10 +173,13 @@ class KGEModel(nn.Module):
             tail = tail - relation
         else:
             head = head + relation
-        score_r = self.gamma.item() - torch.norm(head-tail, p=1, dim=2)
+        # score_r = self.gamma.item() - torch.norm(head-tail, p=1, dim=2)
 
         head = head.view(-1, head.shape[1], self.hidden_dim, self.KDim)
         tail = tail.view(-1, tail.shape[1], self.hidden_dim, self.KDim)
+
+        score_r = self.gamma.item() - torch.sum(torch.norm(head-tail, p=2, dim=3), dim=2)
+
         score_cos = F.cosine_similarity(head, tail, dim=-1)
         score_cos = torch.sum(score_cos, dim=2)/self.hidden_dim - 1.0
         score = (1-self.omega)*self.gamma.item()*score_cos + self.omega*score_r
