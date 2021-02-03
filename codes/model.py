@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import sys
 
 from sklearn.metrics import average_precision_score
 
@@ -33,9 +34,14 @@ class KGEModel(nn.Module):
         )
         
         self.embedding_range = nn.Parameter(
-            torch.Tensor([(self.gamma.item() + self.epsilon) / (KDim*hidden_dim)]), 
+            torch.Tensor([(self.gamma.item() + self.epsilon) / hidden_dim]), 
             requires_grad=False
         )
+        if model_name=='KCosE':
+            self.embedding_range = nn.Parameter(
+                torch.Tensor([(self.gamma.item() + self.epsilon) / (KDim*hidden_dim)]), 
+                requires_grad=False
+            )
         
         self.entity_dim = hidden_dim*2 if double_entity_embedding else hidden_dim
         self.relation_dim = hidden_dim*2 if double_relation_embedding else hidden_dim
@@ -45,6 +51,13 @@ class KGEModel(nn.Module):
             self.omega = omega
             self.entity_dim = hidden_dim*KDim
             self.relation_dim = self.entity_dim
+        
+        if model_name == 'DiagE':
+            self.KDim = KDim
+            self.relation_dim = hidden_dim*(KDim+1)
+        elif model_name == 'Diag2E':
+            self.KDim = KDim
+            self.relation_dim = hidden_dim*(KDim*2+1)
 
         self.entity_embedding = nn.Parameter(torch.zeros(nentity, self.entity_dim))
         nn.init.uniform_(
@@ -54,17 +67,24 @@ class KGEModel(nn.Module):
         )
         
         self.relation_embedding = nn.Parameter(torch.zeros(nrelation, self.relation_dim))
-        nn.init.uniform_(
+        if model_name in ['DiagE', 'Diag2E']:
+           nn.init.uniform_(
             tensor=self.relation_embedding, 
-            a=-self.embedding_range.item(), 
-            b=self.embedding_range.item()
-        )
+                a=-1.0/KDim,
+                b=1.0/KDim
+            )
+        else:
+            nn.init.uniform_(
+            tensor=self.relation_embedding, 
+                a=-self.embedding_range.item(), 
+                b=self.embedding_range.item()
+            )
         
         if model_name == 'pRotatE':
             self.modulus = nn.Parameter(torch.Tensor([[0.5 * self.embedding_range.item()]]))
         
         #Do not forget to modify this line when you add a new model in the "forward" function
-        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'KCosE']:
+        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'KCosE', 'DiagE', 'Diag2E']:
             raise ValueError('model %s not supported' % model_name)
             
         if model_name == 'RotatE' and (not double_entity_embedding or double_relation_embedding):
@@ -158,6 +178,8 @@ class KGEModel(nn.Module):
             'ComplEx': self.ComplEx,
             'RotatE': self.RotatE,
             'KCosE': self.KCosE,
+            'DiagE': self.DiagE,
+            'Diag2E': self.Diag2E,
             'pRotatE': self.pRotatE
         }
         
@@ -168,6 +190,25 @@ class KGEModel(nn.Module):
         
         return score
     
+    def DiagE(self, head: torch.Tensor, relation: torch.Tensor, tail: torch.Tensor, mdoe: str):
+        relations = torch.chunk(relation, self.KDim+1, dim=2)
+        score = self.KDim*self.embedding_range.item()*relations[-1]-tail
+        for i in range(self.KDim):
+            score = score + torch.roll(head, shifts=-i, dims=2)*relations[i]
+
+        score = self.gamma.item() - torch.norm(score, p=1, dim=2)
+        return score
+
+    def Diag2E(self, head: torch.Tensor, relation: torch.Tensor, tail: torch.Tensor, mdoe: str):
+        relations = torch.chunk(relation, self.KDim*2+1, dim=2)
+        score = self.KDim*self.embedding_range.item()*relations[-1]
+        for i in range(self.KDim):
+            score = score + torch.roll(head, shifts=-i, dims=2)*relations[i]
+            score = score - torch.roll(tail, shifts=-i, dims=2)*relations[i+self.KDim]
+
+        score = self.gamma.item() - torch.norm(score, p=1, dim=2)
+        return score
+
     def KCosE(self, head, relation, tail, mode):
         if mode == 'head-batch':
             tail = tail - relation
