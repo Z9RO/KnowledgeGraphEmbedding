@@ -63,7 +63,7 @@ def parse_args(args=None):
     parser.add_argument('-init', '--init_checkpoint', default=None, type=str)
     parser.add_argument('-save', '--save_path', default=None, type=str)
     parser.add_argument('--max_steps', default=100000, type=int)
-    parser.add_argument('--warm_up_steps', default=None, type=int)
+    parser.add_argument('--warm_up_steps', default=10000, type=int)
     
     parser.add_argument('--save_checkpoint_steps', default=10000, type=int)
     parser.add_argument('--valid_steps', default=10000, type=int)
@@ -74,6 +74,8 @@ def parse_args(args=None):
     parser.add_argument('--nrelation', type=int, default=0, help='DO NOT MANUALLY SET')
     parser.add_argument('--KDim', type=int, default=1, help='KDim in KCosE model')
     parser.add_argument('--omega', type=float, default=1, help='omega in KCosE model')
+    parser.add_argument('--end_lr', type=float, default=10.0, help="the max lr in try lr")
+    parser.add_argument('--decay_rate', type=float, default=0.1, help='decay learning rate in every warm_up_steps')
     
     return parser.parse_args(args)
 
@@ -266,15 +268,16 @@ def main(args):
         
         # Set training configuration
         current_learning_rate = args.learning_rate
-        optimizer = torch.optim.SGD(
+        optimizer = torch.optim.Adam(
             filter(lambda p: p.requires_grad, kge_model.parameters()), 
             lr=current_learning_rate
         )
         if args.warm_up_steps:
             warm_up_steps = args.warm_up_steps
         else:
-            warm_up_steps = args.max_steps // 3
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[warm_up_steps*2], gamma=0.01)
+            warm_up_steps = args.max_steps // 2
+        # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[warm_up_steps], gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=warm_up_steps, gamma=args.decay_rate)
 
     if args.init_checkpoint:
         # Restore model from checkpoint directory
@@ -308,9 +311,9 @@ def main(args):
         base_lr = current_learning_rate
         lrs = []
         losses = []
-        min_loss = 10
-        last_loss = 10
-        while last_loss-min_loss<0.5 and base_lr<10:
+        min_loss = 1000000000000000
+        last_loss = min_loss
+        while last_loss/min_loss<2 and base_lr<args.end_lr:
             epochs = 30
             logs = []
             for i in range(epochs):
@@ -322,7 +325,7 @@ def main(args):
             min_loss = min(min_loss, losses[-1])
             last_loss = losses[-1]
             print(lrs[-1], losses[-1])
-            optimizer = torch.optim.SGD(
+            optimizer = torch.optim.Adam(
                 filter(lambda p: p.requires_grad, kge_model.parameters()), 
                 lr=base_lr
             )
