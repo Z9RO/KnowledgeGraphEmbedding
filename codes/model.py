@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 from dataloader import TestDataset
 
 class KGEModel(nn.Module):
-    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, KDim=1, omega=0.5):
+    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, KDim=1, omega=0.5, no_bias=False, stride=1):
         super(KGEModel, self).__init__()
         self.model_name = model_name
         self.nentity = nentity
@@ -53,11 +53,19 @@ class KGEModel(nn.Module):
             self.relation_dim = self.entity_dim
         
         if model_name == 'DiagE':
+            self.stride = stride
             self.KDim = KDim
-            self.relation_dim = hidden_dim*(KDim+1)
+            self.no_bias = no_bias
+            self.relation_dim = hidden_dim*KDim
+            if not no_bias:
+                self.relation_dim += hidden_dim
         elif model_name == 'Diag2E':
+            self.stride = stride
             self.KDim = KDim
-            self.relation_dim = hidden_dim*(KDim*2+1)
+            self.no_bias = no_bias
+            self.relation_dim = hidden_dim*KDim*2
+            if not no_bias:
+                self.relation_dim += hidden_dim
 
         self.entity_embedding = nn.Parameter(torch.zeros(nentity, self.entity_dim))
         nn.init.uniform_(
@@ -191,20 +199,31 @@ class KGEModel(nn.Module):
         return score
     
     def DiagE(self, head: torch.Tensor, relation: torch.Tensor, tail: torch.Tensor, mdoe: str):
-        relations = torch.chunk(relation, self.KDim+1, dim=2)
-        score = self.KDim*self.embedding_range.item()*relations[-1]-tail
+        if self.no_bias:
+            relations = torch.chunk(relation, self.KDim, dim=2)
+            score = -tail
+        else:
+            relations = torch.chunk(relation, self.KDim+1, dim=2)
+            score = self.KDim*self.embedding_range.item()*relations[-1]-tail
+
         for i in range(self.KDim):
-            score = score + torch.roll(head, shifts=-i, dims=2)*relations[i]
+            score = score + torch.roll(head, shifts=-i*self.stride, dims=2)*relations[i]
 
         score = self.gamma.item() - torch.norm(score, p=1, dim=2)
         return score
 
     def Diag2E(self, head: torch.Tensor, relation: torch.Tensor, tail: torch.Tensor, mdoe: str):
-        relations = torch.chunk(relation, self.KDim*2+1, dim=2)
-        score = self.KDim*self.embedding_range.item()*relations[-1]
+        if self.no_bias:
+            relations = torch.chunk(relation, self.KDim*2, dim=2)
+            score = -tail
+        else:
+            relations = torch.chunk(relation, self.KDim*2+1, dim=2)
+            score = self.KDim*self.embedding_range.item()*relations[-1]
+
         for i in range(self.KDim):
-            score = score + torch.roll(head, shifts=-i, dims=2)*relations[i]
-            score = score - torch.roll(tail, shifts=-i, dims=2)*relations[i+self.KDim]
+            shift = -self.stride*i
+            score = score + torch.roll(head, shifts=shift, dims=2)*relations[i]
+            score = score - torch.roll(tail, shifts=shift, dims=2)*relations[i+self.KDim]
 
         score = self.gamma.item() - torch.norm(score, p=1, dim=2)
         return score

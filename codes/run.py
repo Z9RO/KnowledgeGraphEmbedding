@@ -36,6 +36,7 @@ def parse_args(args=None):
     parser.add_argument('--do_valid', action='store_true')
     parser.add_argument('--do_test', action='store_true')
     parser.add_argument('--do_lr_chosen', action='store_true')
+    parser.add_argument('--no_bias', action='store_true')
     parser.add_argument('--evaluate_train', action='store_true', help='Evaluate on training data')
     
     parser.add_argument('--countries', action='store_true', help='Use Countries S1/S2/S3 datasets')
@@ -76,6 +77,7 @@ def parse_args(args=None):
     parser.add_argument('--omega', type=float, default=1, help='omega in KCosE model')
     parser.add_argument('--end_lr', type=float, default=10.0, help="the max lr in try lr")
     parser.add_argument('--decay_rate', type=float, default=0.1, help='decay learning rate in every warm_up_steps')
+    parser.add_argument('--stride', type=int, default=1, help='stride in DiagE model')
     
     return parser.parse_args(args)
 
@@ -236,6 +238,8 @@ def main(args):
         double_entity_embedding=args.double_entity_embedding,
         KDim=args.KDim,
         omega=args.omega,
+        no_bias=args.no_bias,
+        stride=args.stride,
         double_relation_embedding=args.double_relation_embedding
     )
     
@@ -276,7 +280,7 @@ def main(args):
             warm_up_steps = args.warm_up_steps
         else:
             warm_up_steps = args.max_steps // 2
-        # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[warm_up_steps], gamma=0.1)
+        # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[warm_up_steps], gamma=args.decay_rate)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=warm_up_steps, gamma=args.decay_rate)
 
     if args.init_checkpoint:
