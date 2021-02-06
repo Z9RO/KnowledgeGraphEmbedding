@@ -52,7 +52,7 @@ class KGEModel(nn.Module):
             self.entity_dim = hidden_dim*KDim
             self.relation_dim = self.entity_dim
         
-        if model_name == 'DiagE':
+        if model_name == 'TransAdj':
             self.stride = stride
             self.KDim = KDim
             self.no_bias = no_bias
@@ -75,7 +75,7 @@ class KGEModel(nn.Module):
         )
         
         self.relation_embedding = nn.Parameter(torch.zeros(nrelation, self.relation_dim))
-        if model_name in ['DiagE', 'Diag2E']:
+        if model_name in ['TransAdj', 'Diag2E']:
            nn.init.uniform_(
             tensor=self.relation_embedding, 
                 a=-1.0/KDim,
@@ -92,7 +92,7 @@ class KGEModel(nn.Module):
             self.modulus = nn.Parameter(torch.Tensor([[0.5 * self.embedding_range.item()]]))
         
         #Do not forget to modify this line when you add a new model in the "forward" function
-        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'KCosE', 'DiagE', 'Diag2E']:
+        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'KCosE', 'TransAdj', 'Diag2E']:
             raise ValueError('model %s not supported' % model_name)
             
         if model_name == 'RotatE' and (not double_entity_embedding or double_relation_embedding):
@@ -186,7 +186,7 @@ class KGEModel(nn.Module):
             'ComplEx': self.ComplEx,
             'RotatE': self.RotatE,
             'KCosE': self.KCosE,
-            'DiagE': self.DiagE,
+            'TransAdj': self.TransAdj,
             'Diag2E': self.Diag2E,
             'pRotatE': self.pRotatE
         }
@@ -198,7 +198,7 @@ class KGEModel(nn.Module):
         
         return score
     
-    def DiagE(self, head: torch.Tensor, relation: torch.Tensor, tail: torch.Tensor, mdoe: str):
+    def TransAdj(self, head: torch.Tensor, relation: torch.Tensor, tail: torch.Tensor, mdoe: str):
         if self.no_bias:
             relations = torch.chunk(relation, self.KDim, dim=2)
             score = -tail
