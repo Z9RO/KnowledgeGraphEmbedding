@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader
 from dataloader import TestDataset
 
 class KGEModel(nn.Module):
-    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, KDim=1, omega=0.5, no_bias=False, stride=1):
+    def __init__(self, model_name, nentity, nrelation, hidden_dim, gamma, double_entity_embedding=False, double_relation_embedding=False, KDim=1, no_bias=False, stride=1):
         super(KGEModel, self).__init__()
         self.model_name = model_name
         self.nentity = nentity
@@ -45,25 +45,12 @@ class KGEModel(nn.Module):
         
         self.entity_dim = hidden_dim*2 if double_entity_embedding else hidden_dim
         self.relation_dim = hidden_dim*2 if double_relation_embedding else hidden_dim
-
-        if model_name == 'KCosE':
-            self.KDim = KDim
-            self.omega = omega
-            self.entity_dim = hidden_dim*KDim
-            self.relation_dim = self.entity_dim
         
         if model_name == 'TransAdj':
             self.stride = stride
             self.KDim = KDim
             self.no_bias = no_bias
             self.relation_dim = hidden_dim*KDim
-            if not no_bias:
-                self.relation_dim += hidden_dim
-        elif model_name == 'Diag2E':
-            self.stride = stride
-            self.KDim = KDim
-            self.no_bias = no_bias
-            self.relation_dim = hidden_dim*KDim*2
             if not no_bias:
                 self.relation_dim += hidden_dim
 
@@ -75,7 +62,7 @@ class KGEModel(nn.Module):
         )
         
         self.relation_embedding = nn.Parameter(torch.zeros(nrelation, self.relation_dim))
-        if model_name in ['TransAdj', 'Diag2E']:
+        if model_name in ['TransAdj']:
            nn.init.uniform_(
             tensor=self.relation_embedding, 
                 a=-1.0/KDim,
@@ -92,7 +79,7 @@ class KGEModel(nn.Module):
             self.modulus = nn.Parameter(torch.Tensor([[0.5 * self.embedding_range.item()]]))
         
         #Do not forget to modify this line when you add a new model in the "forward" function
-        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'KCosE', 'TransAdj', 'Diag2E']:
+        if model_name not in ['TransE', 'DistMult', 'ComplEx', 'RotatE', 'pRotatE', 'TransAdj']:
             raise ValueError('model %s not supported' % model_name)
             
         if model_name == 'RotatE' and (not double_entity_embedding or double_relation_embedding):
@@ -185,9 +172,7 @@ class KGEModel(nn.Module):
             'DistMult': self.DistMult,
             'ComplEx': self.ComplEx,
             'RotatE': self.RotatE,
-            'KCosE': self.KCosE,
             'TransAdj': self.TransAdj,
-            'Diag2E': self.Diag2E,
             'pRotatE': self.pRotatE
         }
         
@@ -210,39 +195,6 @@ class KGEModel(nn.Module):
             score = score + torch.roll(head, shifts=-i*self.stride, dims=2)*relations[i]
 
         score = self.gamma.item() - torch.norm(score, p=1, dim=2)
-        return score
-
-    def Diag2E(self, head: torch.Tensor, relation: torch.Tensor, tail: torch.Tensor, mdoe: str):
-        if self.no_bias:
-            relations = torch.chunk(relation, self.KDim*2, dim=2)
-            score = -tail
-        else:
-            relations = torch.chunk(relation, self.KDim*2+1, dim=2)
-            score = self.KDim*self.embedding_range.item()*relations[-1]
-
-        for i in range(self.KDim):
-            shift = -self.stride*i
-            score = score + torch.roll(head, shifts=shift, dims=2)*relations[i]
-            score = score - torch.roll(tail, shifts=shift, dims=2)*relations[i+self.KDim]
-
-        score = self.gamma.item() - torch.norm(score, p=1, dim=2)
-        return score
-
-    def KCosE(self, head, relation, tail, mode):
-        if mode == 'head-batch':
-            tail = tail - relation
-        else:
-            head = head + relation
-        # score_r = self.gamma.item() - torch.norm(head-tail, p=1, dim=2)
-
-        head = head.view(-1, head.shape[1], self.hidden_dim, self.KDim)
-        tail = tail.view(-1, tail.shape[1], self.hidden_dim, self.KDim)
-
-        score_r = self.gamma.item() - torch.sum(torch.norm(head-tail, p=2, dim=3), dim=2)
-
-        score_cos = F.cosine_similarity(head, tail, dim=-1)
-        score_cos = torch.sum(score_cos, dim=2)/self.hidden_dim - 1.0
-        score = (1-self.omega)*self.gamma.item()*score_cos + self.omega*score_r
         return score
 
     def TransE(self, head, relation, tail, mode):

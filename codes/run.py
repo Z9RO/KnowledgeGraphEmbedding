@@ -73,8 +73,7 @@ def parse_args(args=None):
     
     parser.add_argument('--nentity', type=int, default=0, help='DO NOT MANUALLY SET')
     parser.add_argument('--nrelation', type=int, default=0, help='DO NOT MANUALLY SET')
-    parser.add_argument('--KDim', type=int, default=1, help='KDim in KCosE model')
-    parser.add_argument('--omega', type=float, default=1, help='omega in KCosE model')
+    parser.add_argument('--KDim', type=int, default=1, help='KDim in TransAdj model')
     parser.add_argument('--end_lr', type=float, default=10.0, help="the max lr in try lr")
     parser.add_argument('--decay_rate', type=float, default=0.1, help='decay learning rate in every warm_up_steps')
     parser.add_argument('--stride', type=int, default=1, help='stride in DiagE model')
@@ -237,7 +236,6 @@ def main(args):
         gamma=args.gamma,
         double_entity_embedding=args.double_entity_embedding,
         KDim=args.KDim,
-        omega=args.omega,
         no_bias=args.no_bias,
         stride=args.stride,
         double_relation_embedding=args.double_relation_embedding
