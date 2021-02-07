@@ -1,3 +1,8 @@
+# Best Configuration for TransAdj
+#
+bash run.sh train TransAdj FB15k-237 0 c2 1024 128 700 9.0 1.0 0.001 30000 16 --KDim 2
+bash run.sh train TransAdj wn18rr 0 b2q 512 512 400 6.0 0.5 0.0005 30000 16 --KDim 2
+#
 # Best Configuration for RotatE
 #
 bash run.sh train RotatE FB15k 0 0 1024 256 1000 24.0 1.0 0.0001 150000 16 -de
